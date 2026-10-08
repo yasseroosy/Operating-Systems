@@ -16,3 +16,5 @@ restore: setup #before running the restore tool, ensure that the setup target ha
 clean: #standard clean target to remove the malicious directory and any temporary files created during the execution of the antivirus daemon or restore tool
 	rm -rf $(MALICIOUS_DIR)
 	rm -f directory-info.last directory-info.new
+
+.PHONY: setup antivirus restore clean #declares the targets as phony, meaning they don't represent actual files. This prevents make from getting confused if a file with the same name as a target exists
