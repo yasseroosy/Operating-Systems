@@ -9,6 +9,7 @@ fi
 DIR=$1
 MALICIOUS_DIR=$2
 INTERVAL=$3
+whitelist=whitelist.txt
 
 #files to track the state of the directory
 LAST_STATE="directory-info.last"
@@ -32,6 +33,9 @@ scan_directory() {
         filename=$(basename "$file") #this gets only the filename from the full path
         is_malicious=0 #flag to track if the file is malicious, 0 means not malicious, 1 means malicious
 
+        if [ -f "$whitelist" ] && grep -qxF "$filename" "$whitelist"; then
+        continue
+        fi
         case "$filename" in
             *.exe|*.bat|*.vbs|*.scr|*.ps1)
                 is_malicious=1
@@ -59,10 +63,8 @@ scan_directory() {
     done
 }
 
-if [ ! -f "$LAST_STATE" ]; then #checks if our baseline snapshot file does not exist. if it doesn't, this is the very first time the daemon is running
     scan_directory
     take_snapshot "$LAST_STATE" #baseline is taken AFTER the scan, so it doesn't list removed files
-fi
 
 while true; do #infinite loop to continuously monitor the directory for changes
     sleep "$INTERVAL"

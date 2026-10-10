@@ -7,6 +7,7 @@ fi
 
 DIR=$1
 MALICIOUS_DIR=$2
+whitelist=whitelist.txt
 
 while true; do #infinite loop to continuously allow the user to review and manage quarantined files
 
@@ -57,8 +58,8 @@ while true; do #infinite loop to continuously allow the user to review and manag
 
     case "$action_choice" in
         1)
-            #mv moves the file back to the original directory; only log success if mv worked
-            if mv "$selected_file" "$DIR/"; then
+            if cp "$selected_file" "$DIR/" && rm "$selected_file"; then
+                echo "$filename" >> "$whitelist"
                 echo "Restored $filename to $DIR."
             fi
             ;;
