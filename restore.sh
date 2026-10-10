@@ -9,62 +9,67 @@ DIR=$1
 MALICIOUS_DIR=$2
 
 while true; do #infinite loop to continuously allow the user to review and manage quarantined files
-    if [ -z "$(ls -A "$MALICIOUS_DIR" 2>/dev/null)" ]; then # ls -A outputs all files/hidden files except . and ..
-                                                            # 2>/dev/null suppresses error messages if the directory doesn't exist or is empty
-                                                            # -z checks if the output is empty, meaning there are no files in the malicious directory
+
+    #build the list of quarantined files first
+    files=() #initialize an empty array to hold the list of files in the malicious directory
+    for f in "$MALICIOUS_DIR"/*; do
+        #if the directory is empty (or missing), the glob stays as the literal text "dir/*", so skip it
+        [ -f "$f" ] || continue
+        files+=("$f") #append the file to the array of files
+    done
+
+    #${#files[@]} is the number of elements in the array
+    if [ "${#files[@]}" -eq 0 ]; then
         echo "No malicious files to review."
         exit 0
     fi
 
-    echo "Quarantined files in $MALICIOUS_DIR:"
-    
-    files=() #initialize an empty array to hold the list of files in the malicious directory
-    i=1
-    for f in "$MALICIOUS_DIR"/*; do
-        # In case the directory is empty, the glob might just return the literal path + /*
-        [ -e "$f" ] || continue #checks if the file exists, if not, skip to the next iteration
-        files+=("$f") #append the file to the array of files
-        filename=$(basename "$f") 
-        echo "$i) $filename"
-        ((i++))
+    echo "Choose a file:"
+    for i in "${!files[@]}"; do #${!files[@]} gives the indexes of the array (0, 1, 2, ...)
+        echo "$((i+1)): $(basename "${files[$i]}")" #print as "N: name", numbering starts at 1
     done
 
-    echo "0) Exit tool"    
-    read -p "Select a file by number: " file_choice #similar to scanf in c, this reads user input and stores it in the variable file_choice
-
-    if [ "$file_choice" == "0" ]; then #if the user selects 0, exit the tool
-        echo "Exiting tool."
+    #read returns a non-zero status when there is no more input (e.g. input was piped in and ran out,
+    #or the user pressed Ctrl+D). Without this check the loop would repeat forever.
+    #-r stops read from treating backslashes as escape characters
+    if ! read -r file_choice; then
         exit 0
     fi
 
-    if ! [[ "$file_choice" =~ ^[0-9]+$ ]] || [ "$file_choice" -lt 1 ] || [ "$file_choice" -gt "${#files[@]}" ]; then #input validation
+    #input validation: must be digits only, and between 1 and the number of files
+    if ! [[ "$file_choice" =~ ^[0-9]+$ ]] || [ "$file_choice" -lt 1 ] || [ "$file_choice" -gt "${#files[@]}" ]; then
         echo "Invalid selection. Please try again."
         continue
     fi
 
-    selected_file="${files[$((file_choice-1))]}" #get the selected file from the array based on user input, adjusting for 0-based indexing
-    filename=$(basename "$selected_file") #only get the filename from the full path for display purposes
+    #10# forces base 10, otherwise bash reads a number with a leading 0 (like 08) as octal and errors out
+    selected_file="${files[$((10#$file_choice - 1))]}" #adjust for 0-based indexing
+    filename=$(basename "$selected_file") #only the filename, for display purposes
 
-    echo ""
-    echo "Options for $filename:"
-    echo "1: Restore this file back into $DIR"
-    echo "2: Permanently delete this file from $MALICIOUS_DIR"
-    echo "3: Leave this file as-is and go back to the list"
-    
-    read -p "Pick an option (1/2/3): " action_choice
+    echo "For $filename:"
+    echo "1: Restore this file back into dir (it was a false positive)"
+    echo "2: Permanently delete this file from malicious_dir (it was genuinely malicious)"
+    echo "3: Go back"
+
+    if ! read -r action_choice; then
+        exit 0
+    fi
 
     case "$action_choice" in
         1)
-            mv "$selected_file" "$DIR/"
-            echo "Restored $filename to $DIR." #mv moves the file back to the original directory, effectively restoring it from quarantine
+            #mv moves the file back to the original directory; only log success if mv worked
+            if mv "$selected_file" "$DIR/"; then
+                echo "Restored $filename to $DIR."
+            fi
             ;;
         2)
-            rm "$selected_file"
-            echo "$filename permanently deleted." #rm removes the file from the malicious directory, permanently deleting it
+            #rm removes the file from the malicious directory, permanently deleting it
+            if rm "$selected_file"; then
+                echo "$filename permanently deleted."
+            fi
             ;;
         3)
             #do nothing, just go back to the list of files
-            echo "Leaving $filename in quarantine."
             ;;
         *)
             echo "Invalid option. Going back to list."
